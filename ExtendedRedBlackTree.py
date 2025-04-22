@@ -1,4 +1,8 @@
+import logging
 from ExtendedRBTNode import ExtendedRBTNode
+
+# Configure logging for debugging
+logging.basicConfig(level=logging.DEBUG)
 
 class ExtendedRedBlackTree:
     def __init__(self):
@@ -19,6 +23,7 @@ class ExtendedRedBlackTree:
         y.left = x
         x.parent = y
 
+        # Update subtree key counts after rotation
         x.update_subtree_key_count()
         y.update_subtree_key_count()
 
@@ -37,10 +42,12 @@ class ExtendedRedBlackTree:
         x.right = y
         y.parent = x
 
+        # Update subtree key counts after rotation
         y.update_subtree_key_count()
         x.update_subtree_key_count()
 
     def insert(self, key):
+        logging.debug(f"Inserting key: {key}")
         node = ExtendedRBTNode(key)
         y = None
         x = self.root
@@ -95,10 +102,15 @@ class ExtendedRedBlackTree:
 
     def _update_counts_upward(self, node):
         while node:
+            logging.debug(f"Updating subtree key count for node with key: {node.key}")
             node.update_subtree_key_count()
             node = node.parent
 
     def get_nth_key(self, n):
+        if n < 0 or not self.root or n >= self.root.subtree_key_count:
+            logging.error("Invalid value for n: Out of range")
+            return None
+
         def helper(node, n):
             if not node:
                 return None
