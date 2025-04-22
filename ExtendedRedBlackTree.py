@@ -1,137 +1,102 @@
-import logging
+from RedBlackTree import RedBlackTree
 from ExtendedRBTNode import ExtendedRBTNode
+from RBTNode import RBTNode
 
-# Configure logging for debugging
-logging.basicConfig(level=logging.DEBUG)
-
-class ExtendedRedBlackTree:
+class ExtendedRedBlackTree(RedBlackTree):
     def __init__(self):
-        self.root = None
+        super().__init__()
+        self.visited_nodes = []
 
-    def left_rotate(self, x):
-        y = x.right
-        x.right = y.left
-        if y.left:
-            y.left.parent = x
-        y.parent = x.parent
-        if not x.parent:
-            self.root = y
-        elif x == x.parent.left:
-            x.parent.left = y
-        else:
-            x.parent.right = y
-        y.left = x
-        x.parent = y
+    def make_new_node(self, key):
+        return ExtendedRBTNode(key)
 
-        # Update subtree key counts after rotation
-        x.update_subtree_key_count()
-        y.update_subtree_key_count()
+    def insert_key(self, key):
+        new_node = self.make_new_node(key)
+        self.insert_node(new_node)
+        return new_node
 
-    def right_rotate(self, y):
-        x = y.left
-        y.left = x.right
-        if x.right:
-            x.right.parent = y
-        x.parent = y.parent
-        if not y.parent:
-            self.root = x
-        elif y == y.parent.right:
-            y.parent.right = x
-        else:
-            y.parent.left = x
-        x.right = y
-        y.parent = x
+    def insert_node(self, node):
+        super().insert_node(node)
+        self._update_subtree_counts_upward(node)
 
-        # Update subtree key counts after rotation
-        y.update_subtree_key_count()
-        x.update_subtree_key_count()
+    def remove_node(self, node):
+        if not node:
+            return False
 
-    def insert(self, key):
-        logging.debug(f"Inserting key: {key}")
-        node = ExtendedRBTNode(key)
-        y = None
-        x = self.root
+        # Case 1: Node has two children
+        if node.get_left() and node.get_right():
+            # Step 1: Find predecessor
+            predecessor = node.get_left()
+            while predecessor.get_right():
+                predecessor = predecessor.get_right()
 
-        while x:
-            y = x
-            if key < x.key:
-                x = x.left
-            else:
-                x = x.right
+            # Step 2: Store key and parent
+            pred_key = predecessor.get_key()
+            parent_of_predecessor = predecessor.parent
 
-        node.parent = y
-        if not y:
-            self.root = node
-        elif key < y.key:
-            y.left = node
-        else:
-            y.right = node
+            # Step 3: Prepare predecessor if black
+            if predecessor.is_black():
+                self.prepare_for_removal(predecessor)
 
-        self.fix_insert(node)
+            # Step 4: Remove predecessor using base method
+            super().remove_node(predecessor)
 
-    def fix_insert(self, z):
-        while z.parent and z.parent.color == 'red':
-            if z.parent == z.parent.parent.left:
-                y = z.parent.parent.right
-                if y and y.color == 'red':
-                    z.parent.color = y.color = 'black'
-                    z.parent.parent.color = 'red'
-                    z = z.parent.parent
-                else:
-                    if z == z.parent.right:
-                        z = z.parent
-                        self.left_rotate(z)
-                    z.parent.color = 'black'
-                    z.parent.parent.color = 'red'
-                    self.right_rotate(z.parent.parent)
-            else:
-                y = z.parent.parent.left
-                if y and y.color == 'red':
-                    z.parent.color = y.color = 'black'
-                    z.parent.parent.color = 'red'
-                    z = z.parent.parent
-                else:
-                    if z == z.parent.left:
-                        z = z.parent
-                        self.right_rotate(z)
-                    z.parent.color = 'black'
-                    z.parent.parent.color = 'red'
-                    self.left_rotate(z.parent.parent)
-        self.root.color = 'black'
-        self._update_counts_upward(z)
+            # Step 5: Replace node's key AFTER removal
+            node.set_key(pred_key)
 
-    def _update_counts_upward(self, node):
+            # Step 6: Update counts from both node and predecessor's parent
+            self._update_subtree_counts_upward(node)
+            self._update_subtree_counts_upward(parent_of_predecessor)
+            return True
+
+        # Case 2: Node has 0 or 1 child
+        if node.is_black():
+            self.prepare_for_removal(node)
+
+        result = super().remove_node(node)
+
+        if self.root and self.root.is_red():
+            self.root.color = RBTNode.black
+
+        self._update_subtree_counts_upward(node.parent if node else None)
+        return result
+
+    def _left_rotate(self, node):
+        rotated = super()._left_rotate(node)
+        node._update_subtree_key_count()
+        rotated._update_subtree_key_count()
+        if rotated.parent:
+            rotated.parent._update_subtree_key_count()
+        return rotated
+
+    def _right_rotate(self, node):
+        rotated = super()._right_rotate(node)
+        node._update_subtree_key_count()
+        rotated._update_subtree_key_count()
+        if rotated.parent:
+            rotated.parent._update_subtree_key_count()
+        return rotated
+
+    def _update_subtree_counts_upward(self, node):
         while node:
-            logging.debug(f"Updating subtree key count for node with key: {node.key}")
-            node.update_subtree_key_count()
+            node._update_subtree_key_count()
             node = node.parent
 
     def get_nth_key(self, n):
-        if n < 0 or not self.root or n >= self.root.subtree_key_count:
-            logging.error("Invalid value for n: Out of range")
+        self.visited_nodes = []
+        if not self.root:
             return None
+        return self._get_nth_key_recursive(self.root, n)
 
-        def helper(node, n):
-            if not node:
-                return None
-            left_count = node.left.subtree_key_count if node.left else 0
-            if n < left_count:
-                return helper(node.left, n)
-            elif n == left_count:
-                return node.key
-            else:
-                return helper(node.right, n - left_count - 1)
+    def _get_nth_key_recursive(self, node, n):
+        self.visited_nodes.append(node)
 
-        return helper(self.root, n)
+        left = node.get_left()
+        left_count = left.get_subtree_key_count() if left else 0
 
-    def in_order_traversal(self, node=None, result=None):
-        if result is None:
-            result = []
-        if node is None:
-            node = self.root
-        if node.left:
-            self.in_order_traversal(node.left, result)
-        result.append(node.key)
-        if node.right:
-            self.in_order_traversal(node.right, result)
-        return result
+        if n == left_count:
+            return node.get_key()
+        elif n < left_count:
+            return self._get_nth_key_recursive(left, n)
+        else:
+            return self._get_nth_key_recursive(node.get_right(), n - left_count - 1)
